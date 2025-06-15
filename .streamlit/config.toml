@@ -1,0 +1,7 @@
+[theme]
+base="light"
+primaryColor="#00bfa6"               # Türkis (Merchify/Soulstorm)
+backgroundColor="#f6fefe"            # Sehr helles Türkis
+secondaryBackgroundColor="#e0fbf6"   # Heller Mintton
+textColor="#00303D"                  # Navy (seriös)
+font="sans serif"
