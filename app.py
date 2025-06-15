@@ -3,10 +3,10 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
+st.set_page_config(page_title="Merchify.Reduce", layout="wide")
+
 # Custom loading screen
 with st.spinner('Flow your stock. Free your margin.'):
-    st.set_page_config(page_title="Merchify.Reduce", layout="wide")
-
     # Logo & Slogan
     st.markdown("""
         <div style='display:flex;align-items:center;gap:20px;margin-bottom:20px;'>
