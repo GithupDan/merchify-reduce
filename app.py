@@ -20,8 +20,8 @@ uploaded_file = st.file_uploader("📤 Excel-Datei mit Artikeldaten hochladen", 
 if uploaded_file:
     df = pd.read_excel(uploaded_file)
     df["Verkaufs_Enddatum"] = pd.to_datetime(df["Verkaufs_Enddatum"])
-    df["RW_4W"] = df[["Absatz_W1", "Absatz_W2", "Absatz_W3", "Absatz_W4"]].sum(axis=1) / 4
-    df["RW_Tage"] = df["Bestand"] / df["RW_4W"] * 7
+    df["RW_4W"] = df[["Absatz W1", "Absatz W2", "Absatz W3", "Absatz W4"]].sum(axis=1) / 4
+    df["RW_Tage"] = df["Bestand"] / df["RW_4W"].replace(0, 0.01) * 7
     df["Tage_bis_Ende"] = (df["Verkaufs_Enddatum"] - pd.to_datetime(stichtag)).dt.days.clip(lower=1)
     df["RW_Faktor"] = df["RW_Tage"] / df["Tage_bis_Ende"]
 
