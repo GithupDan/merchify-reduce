@@ -6,7 +6,11 @@ from io import BytesIO
 
 st.set_page_config(page_title="Merchify – Abschriftenmodul", layout="wide")
 
-st.image("https://raw.githubusercontent.com/GithupDan/merchify-reduce/main/logo.png", width=180)
+# Logo anzeigen
+try:
+    st.image("https://raw.githubusercontent.com/GithupDan/merchify-reduce/main/logo.png", width=180)
+except:
+    st.warning("Logo konnte nicht geladen werden.")
 st.markdown("### *The markdown engine for modern retail.*")
 
 st.sidebar.header("⚙️ Abschriften-Parameter")
@@ -55,9 +59,8 @@ if uploaded_file:
     }), use_container_width=True)
 
     output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False, sheet_name="Ergebnis")
-        writer.save()
     processed_data = output.getvalue()
 
     st.download_button(
