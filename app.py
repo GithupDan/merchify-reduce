@@ -2,6 +2,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
+from io import BytesIO
 
 st.set_page_config(page_title="Merchify – Abschriftenmodul", layout="wide")
 
@@ -53,8 +54,15 @@ if uploaded_file:
         "Abschriftenquote_%": "{:.1f}%"
     }), use_container_width=True)
 
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name="Ergebnis")
+        writer.save()
+    processed_data = output.getvalue()
+
     st.download_button(
-        "📥 Download Ergebnis als Excel",
-        data=df.to_excel(index=False),
-        file_name="Merchify_Ergebnis.xlsx"
+        label="📥 Download Ergebnis als Excel",
+        data=processed_data,
+        file_name="Merchify_Ergebnis.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
