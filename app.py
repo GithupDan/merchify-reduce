@@ -1,79 +1,60 @@
 
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+import datetime
 
-st.set_page_config(page_title="Merchify.Reduce", layout="wide")
+st.set_page_config(page_title="Merchify – Abschriftenmodul", layout="wide")
 
-# Custom loading screen
-with st.spinner('Flow your stock. Free your margin.'):
-    # Logo & Slogan
-    st.markdown("""
-        <div style='display:flex;align-items:center;gap:20px;margin-bottom:20px;'>
-            <img src="https://raw.githubusercontent.com/your-repo/merchify-dashboard/main/logo.png" width="60"/>
-            <h1 style='color:#00303D;margin:0;'>Merchify</h1>
-        </div>
-        <h4 style='color:#00bfa6;margin-top:-10px;'>The markdown engine for modern retail.</h4>
-    """, unsafe_allow_html=True)
+st.image("https://raw.githubusercontent.com/GithupDan/merchify-reduce/main/logo.png", width=180)
+st.markdown("### *The markdown engine for modern retail.*")
 
-    # Parameter-Eingaben
+st.sidebar.header("⚙️ Abschriften-Parameter")
+rw_critical = st.sidebar.slider("RW-Faktor kritisch", 1.0, 5.0, 2.0)
+abschlag_leicht = st.sidebar.slider("Abschlag leicht kritisch (%)", 0, 100, 20)
+abschlag_stark = st.sidebar.slider("Abschlag stark kritisch (%)", 0, 100, 40)
+min_db = st.sidebar.number_input("Mindest-Deckungsbeitrag (€)", value=0.0)
+stichtag = st.sidebar.date_input("Stichtag", value=datetime.date.today())
+
+uploaded_file = st.file_uploader("📤 Excel-Datei mit Artikeldaten hochladen", type=["xlsx"])
+
+if uploaded_file:
+    df = pd.read_excel(uploaded_file)
+    df["Verkaufs_Enddatum"] = pd.to_datetime(df["Verkaufs_Enddatum"])
+    df["RW_4W"] = df[["Absatz_W1", "Absatz_W2", "Absatz_W3", "Absatz_W4"]].sum(axis=1) / 4
+    df["RW_Tage"] = df["Bestand"] / df["RW_4W"] * 7
+    df["Tage_bis_Ende"] = (df["Verkaufs_Enddatum"] - pd.to_datetime(stichtag)).dt.days.clip(lower=1)
+    df["RW_Faktor"] = df["RW_Tage"] / df["Tage_bis_Ende"]
+
+    df["Abschlag_%"] = 0
+    df.loc[(df["RW_Faktor"] > rw_critical) & (df["RW_Faktor"] <= rw_critical + 1), "Abschlag_%"] = abschlag_leicht
+    df.loc[df["RW_Faktor"] > rw_critical + 1, "Abschlag_%"] = abschlag_stark
+
+    df["Neuer_Preis"] = df["Aktueller_Preis"] * (1 - df["Abschlag_%"] / 100)
+    df["Deckungsbeitrag_neu"] = df["Neuer_Preis"] - df["EKP"]
+    df["Abschriftenwert"] = df["Bestand"] * (df["Aktueller_Preis"] - df["Neuer_Preis"])
+    df["DB_alt"] = df["Bestand"] * (df["Aktueller_Preis"] - df["EKP"])
+    df["DB_neu"] = df["Bestand"] * (df["Neuer_Preis"] - df["EKP"])
+    df["Abschriftenquote_%"] = (df["Abschriftenwert"] / (df["Bestand"] * df["Aktueller_Preis"])) * 100
+    df["Reduzierung empfohlen"] = (df["Abschlag_%"] > 0) & (df["Deckungsbeitrag_neu"] >= min_db)
+
+    st.subheader("📊 Dashboard")
     col1, col2, col3 = st.columns(3)
-    with col1:
-        abschlags_prozent = st.number_input("💥 Abschlags-Prozentsatz bei Bedarf", min_value=0, max_value=90, value=30, step=5)
-    with col2:
-        rw_faktor_kritisch = st.number_input("⚠️ RW-Faktor für Kritisch (z. B. 2× Laufzeit)", min_value=0.5, max_value=5.0, value=2.0, step=0.1)
-    with col3:
-        stichtag = st.date_input("📅 Heutiges Datum für Simulation", value=datetime.today())
-    heute = pd.to_datetime(stichtag)
+    col1.metric("Aktuelle Marge (€)", f"{df['DB_alt'].sum():,.0f}")
+    col2.metric("Neue Marge (€)", f"{df['DB_neu'].sum():,.0f}")
+    col3.metric("Abschriftenwert (€)", f"{df['Abschriftenwert'].sum():,.0f}")
 
-    # Datei-Upload
-    uploaded_file = st.file_uploader("📤 Excel-Datei mit Artikeldaten hochladen", type=["xlsx"])
+    st.subheader("📋 Ergebnis-Tabelle")
+    st.dataframe(df.style.format({
+        "RW_Faktor": "{:.2f}",
+        "Abschlag_%": "{:.0f}%",
+        "Neuer_Preis": "€{:.2f}",
+        "Deckungsbeitrag_neu": "€{:.2f}",
+        "Abschriftenwert": "€{:.2f}",
+        "Abschriftenquote_%": "{:.1f}%"
+    }), use_container_width=True)
 
-    if uploaded_file:
-        df = pd.read_excel(uploaded_file)
-
-        # Datumsfelder konvertieren
-        df["Wareneingang"] = pd.to_datetime(df["Wareneingang"], errors="coerce")
-        df["Verkaufs_Enddatum"] = pd.to_datetime(df["Verkaufs_Enddatum"], errors="coerce")
-
-        # Berechnungen
-        df["Ø_Wochenabsatz"] = df[["Absatz W1", "Absatz W2", "Absatz W3", "Absatz W4"]].mean(axis=1)
-        df["RW_in_Wochen"] = df["Bestand"] / df["Ø_Wochenabsatz"].replace(0, 0.1)
-        df["RW_in_Tagen"] = df["RW_in_Wochen"] * 7
-        df["Warenalter_Tage"] = (heute - df["Wareneingang"]).dt.days
-        df["Tage_bis_Ende"] = (df["Verkaufs_Enddatum"] - heute).dt.days.abs()
-        df["Wochen_bis_Ende"] = df["Tage_bis_Ende"] / 7
-
-        # Entscheidungslogik
-        df["Abschriftenbedarf"] = df.apply(
-            lambda row: row["RW_in_Wochen"] > row["Wochen_bis_Ende"], axis=1
-        )
-        df["Vorgeschlagener_Abschlag_%"] = df["Abschriftenbedarf"].apply(lambda x: abschlags_prozent if x else 0)
-        df["Neuer_Preis"] = df["Aktueller_Preis"] * (1 - df["Vorgeschlagener_Abschlag_%"] / 100)
-        df["Bestandswert_EK"] = df["Bestand"] * df["EKP"]
-        df["Deckungsbeitrag_neu"] = (df["Neuer_Preis"] - df["EKP"]) * df["Bestand"]
-        df["Rohertragsverlust_%"] = (df["Aktueller_Preis"] - df["Neuer_Preis"]) / df["Aktueller_Preis"] * 100
-        df["Absatz_summe"] = df[["Absatz W1", "Absatz W2", "Absatz W3", "Absatz W4"]].sum(axis=1)
-        df["Abverkaufsquote"] = df["Absatz_summe"] / (df["Absatz_summe"] + df["Bestand"]) * 100
-        df["RW_kritisch"] = df.apply(
-            lambda row: row["RW_in_Wochen"] > (rw_faktor_kritisch * row["Wochen_bis_Ende"]) if row["Verkaufs_Enddatum"] > heute else False,
-            axis=1
-        )
-
-        # Anzeige
-        st.subheader("📋 Analyseergebnisse")
-        st.dataframe(df[[
-            "Artikelnummer", "Artikelname", "Kategorie", "Filiale", "Bestand",
-            "Wareneingang", "Warenalter_Tage", "Verkaufs_Enddatum", "Tage_bis_Ende", "Wochen_bis_Ende",
-            "Absatz W1", "Absatz W2", "Absatz W3", "Absatz W4", "Absatz_summe", "Abverkaufsquote",
-            "Ø_Wochenabsatz", "RW_in_Wochen", "RW_in_Tagen", "RW_kritisch",
-            "Aktueller_Preis", "Vorgeschlagener_Abschlag_%", "Neuer_Preis", "EKP",
-            "Rohertragsverlust_%", "Bestandswert_EK", "Deckungsbeitrag_neu", "Abschriftenbedarf"
-        ]].round(2))
-
-        df.to_excel("abschriften_dashboard_ergebnis.xlsx", index=False)
-        with open("abschriften_dashboard_ergebnis.xlsx", "rb") as f:
-            st.download_button("⬇️ Download Ergebnis als Excel", f, file_name="abschriften_dashboard_ergebnis.xlsx")
-
-    else:
-        st.info("Bitte lade eine Excel-Datei hoch, um die Analyse zu starten.")
+    st.download_button(
+        "📥 Download Ergebnis als Excel",
+        data=df.to_excel(index=False),
+        file_name="Merchify_Ergebnis.xlsx"
+    )
